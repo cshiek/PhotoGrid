@@ -207,6 +207,12 @@
     overflow: hidden;
     cursor: grab;
     display: block;
+    background: transparent;
+    transition: overflow 0.15s, background 0.15s;
+  }
+  .cell .img-wrapper.contain {
+    overflow: visible;
+    background: var(--bg);
   }
   .cell .img-wrapper.panning {
     cursor: crosshair;
@@ -357,6 +363,7 @@
   <label>Rows <input type="number" id="rows" min="1" max="20" value="4"></label>
   <label>Cols <input type="number" id="cols" min="1" max="20" value="4"></label>
   <button class="btn btn-primary" onclick="applyGridSize()">Apply</button>
+  <button class="btn btn-secondary" id="mode-btn" onclick="toggleCoverMode()">Cover</button>
   <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">Upload Photos</button>
   <button class="btn btn-secondary" onclick="clearGrid()">Clear All</button>
   <button class="btn btn-secondary" onclick="saveGrid()">Save</button>
@@ -396,7 +403,7 @@ const dropOverlay = document.getElementById('drop-overlay');
 let gridState = loadState();
 
 function defaultState() {
-  return { rows: 4, cols: 4, cells: {} };
+  return { rows: 4, cols: 4, coverMode: true, cells: {} };
   // cells: { "0": "imgDataUrl", "1": "imgDataUrl", ... }
 }
 
@@ -467,6 +474,7 @@ document.getElementById('load-input').addEventListener('change', async (e) => {
     }
 
     gridState = data;
+    if (gridState.coverMode == null) gridState.coverMode = true;
     document.getElementById('rows').value = data.rows;
     document.getElementById('cols').value = data.cols;
     saveState();
@@ -512,7 +520,8 @@ function render() {
       }
 
       const wrapper = document.createElement('div');
-      wrapper.className = 'img-wrapper';
+      const isCover = gridState.coverMode;
+      wrapper.className = 'img-wrapper' + (isCover ? ' cover' : ' contain');
       wrapper.dataset.index = i;
       wrapper.draggable = true;
 
@@ -522,7 +531,7 @@ function render() {
       imgEl.draggable = false;
       imgEl.dataset.index = i;
 
-      // Calculate pixel dimensions to cover the cell
+      // Calculate pixel dimensions based on cover/contain mode
       const initImg = new Image();
       initImg.onload = () => {
         const cellRect = wrapper.parentElement.getBoundingClientRect();
@@ -531,15 +540,16 @@ function render() {
         const nW = initImg.naturalWidth;
         const nH = initImg.naturalHeight;
 
-        // Dimensions to cover the cell while maintaining aspect ratio
         const ratio = nW / nH;
         let baseW, baseH;
-        if (ratio >= cellW / cellH) {
-          baseH = cellH;
-          baseW = Math.round(baseH * ratio);
+        if (isCover) {
+          // COVER: shorter fills cell, longer extends (cropped)
+          if (ratio >= cellW / cellH) { baseH = cellH; baseW = Math.round(baseH * ratio); }
+          else { baseW = cellW; baseH = Math.round(baseW / ratio); }
         } else {
-          baseW = cellW;
-          baseH = Math.round(baseW / ratio);
+          // CONTAIN: longer fits cell, shorter leaves space (letterbox)
+          if (ratio >= cellW / cellH) { baseW = cellW; baseH = Math.round(baseW / ratio); }
+          else { baseH = cellH; baseW = Math.round(baseH * ratio); }
         }
 
         imgEl.style.width = baseW + 'px';
@@ -884,6 +894,62 @@ function resetAll() {
   toast('Reset to defaults');
 }
 
+// ── Cover / Contain Toggle ──
+function toggleCoverMode() {
+  gridState.coverMode = !gridState.coverMode;
+  const btn = document.getElementById('mode-btn');
+  btn.textContent = gridState.coverMode ? 'Cover' : 'Contain';
+
+  // Recalculate all cell images and re-render
+  for (const key of Object.keys(gridState.cells)) {
+    const cellData = gridState.cells[key];
+    if (typeof cellData !== 'object' || !cellData.data) continue;
+    resetImageDimensions(parseInt(key));
+  }
+  render();
+  saveState();
+  toast(gridState.coverMode ? 'Cover mode — edges cropped' : 'Contain mode — full image visible');
+}
+
+function resetImageDimensions(cellIdx) {
+  const cellData = gridState.cells[cellIdx];
+  if (typeof cellData !== 'object' || !cellData.data) return;
+
+  const wrapper = document.querySelector(`.img-wrapper[data-index="${cellIdx}"]`);
+  const imgEl = wrapper ? wrapper.querySelector('.photo') : null;
+  if (!wrapper || !imgEl) return;
+
+  const cellRect = wrapper.parentElement.getBoundingClientRect();
+  const cellW = cellRect.width;
+  const cellH = cellRect.height;
+
+  const tempImg = new Image();
+  tempImg.onload = () => {
+    const nW = tempImg.naturalWidth;
+    const nH = tempImg.naturalHeight;
+    const ratio = nW / nH;
+    let baseW, baseH;
+
+    if (gridState.coverMode) {
+      if (ratio >= cellW / cellH) { baseH = cellH; baseW = Math.round(baseH * ratio); }
+      else { baseW = cellW; baseH = Math.round(baseW / ratio); }
+    } else {
+      if (ratio >= cellW / cellH) { baseW = cellW; baseH = Math.round(baseW / ratio); }
+      else { baseH = cellH; baseW = Math.round(baseH * ratio); }
+    }
+
+    imgEl.style.width = baseW + 'px';
+    imgEl.style.height = baseH + 'px';
+    imgEl.style.left = '0px';
+    imgEl.style.top = '0px';
+    imgEl.dataset.baseW = baseW;
+    imgEl.dataset.baseH = baseH;
+
+    applyTransform(wrapper, imgEl, cellData.zoom, cellData.panX, cellData.panY);
+  };
+  tempImg.src = cellData.data;
+}
+
 // ── File Upload ──
 let queuedPhoto = null; // null = no queue, or the data URL
 
@@ -1200,6 +1266,10 @@ document.documentElement.addEventListener('drop', (e) => {
 // Restore grid size inputs
 document.getElementById('rows').value = gridState.rows;
 document.getElementById('cols').value = gridState.cols;
+
+// Set cover/contain mode button
+if (gridState.coverMode == null) gridState.coverMode = true;
+document.getElementById('mode-btn').textContent = gridState.coverMode ? 'Cover' : 'Contain';
 
 // Show TIFF support status
 const tiffEl = document.getElementById('tiff-status');

@@ -8,6 +8,7 @@ A browser-based photo grid editor for arranging images in a configurable grid la
 - **Upload & place** — Upload photos and click empty cells to place them
 - **Drag & drop** — Drag photos between cells to reorder; drag from anywhere on the page to upload
 - **Per-image pan & zoom** — Scroll wheel to zoom, Shift+drag to pan each image independently
+- **Cover / Contain toggle** — Switch all images between "cover" (fills cell, cropped edges) and "contain" (full image visible with letterbox bars)
 - **Double-click** — Reset an image to its default zoom and center position
 - **Save / Load** — Export the grid state to a JSON file for backup or transfer
 - **Print** — Print-friendly layout optimized for A4 paper
@@ -55,13 +56,14 @@ TIFF support requires `utif.js` and `pako.min.js` to be present.
 1. **Upload** — Click "Upload Photos" or drag image files onto the page
 2. **Place** — Click an empty cell to place the first queued photo
 3. **Zoom** — Scroll the mouse wheel while hovering an image (1x–10x)
-4. **Pan** — Hold Shift and drag on a zoomed image to reveal hidden areas
-5. **Reorder** — Drag an image to a different cell to move it; drag to an occupied cell to swap
-6. **Reset** — Double-click any image to reset its zoom and position
-7. **Delete** — Hover an image and click the × button in the top-right corner
-8. **Save** — Click "Save" to download the grid configuration as a JSON file
-9. **Load** — Click "Load" to restore a previously saved grid configuration
-10. **Print** — Click "Print Grid" to generate a print-ready layout
+4. **Cover / Contain** — Click "Cover" or "Contain" in the topbar to toggle between cropped (fills cell) and full-image (letterboxed) views for all photos
+5. **Pan** — Hold Shift and drag on an image to reveal hidden areas
+6. **Reorder** — Drag an image to a different cell to move it; drag to an occupied cell to swap
+7. **Reset** — Double-click any image to reset its zoom and position
+8. **Delete** — Hover an image and click the × button in the top-right corner
+9. **Save** — Click "Save" to download the grid configuration as a JSON file
+10. **Load** — Click "Load" to restore a previously saved grid configuration
+11. **Print** — Click "Print Grid" to generate a print-ready layout
 
 ## Keyboard Shortcuts
 
