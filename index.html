@@ -333,11 +333,6 @@
       border: 1px solid #ccc;
     }
 
-    .cell .photo {
-      object-fit: cover;
-      object-position: center;
-    }
-
     .cell .delete-btn,
     .cell .index-label,
     .cell .zoom-label,
@@ -824,27 +819,52 @@ window.addEventListener('resize', () => {
 
 // ── Print Layout ──
 function doPrint() {
-  // Calculate cell size to fit A4 page with margins
-  const pageWidth = 210 - 20;    // A4 minus margins (mm)
-  const pageHeight = 297 - 20;   // A4 minus margins (mm)
-  const margin = 2;              // gap between cells
-  const cols = gridState.cols;
-  const rows = gridState.rows;
+  // Save original wrapper overflow and background styles
+  const wrappers = document.querySelectorAll('.img-wrapper');
+  const savedWrapperStyles = new Map();
+  wrappers.forEach(w => {
+    const idx = w.dataset.index;
+    savedWrapperStyles.set(idx, {
+      overflow: w.style.overflow,
+      background: w.style.background,
+    });
+  });
 
-  const cellW = (pageWidth - margin * (cols + 1)) / cols;
-  const cellH = (pageHeight - margin * (rows + 1)) / rows;
-  const cellSize = Math.min(cellW, cellH);
+  // Switch to cover mode for print sizing
+  const savedMode = gridState.coverMode;
+  gridState.coverMode = true;
+  for (const key of Object.keys(gridState.cells)) {
+    const cellData = gridState.cells[key];
+    if (typeof cellData === 'object' && cellData.data) {
+      resetImageDimensions(parseInt(key));
+    }
+  }
 
-  document.documentElement.style.setProperty('--cell-size', cellSize + 'mm');
-
-  // Set up print-specific layout
-  gridEl.style.gridTemplateColumns = `repeat(${cols}, auto)`;
-  gridEl.style.gridTemplateRows = `repeat(${rows}, auto)`;
+  // Hide letterbox bars for print
+  wrappers.forEach(w => {
+    w.style.overflow = 'hidden';
+    w.style.background = 'transparent';
+  });
 
   window.print();
 
+  // Restore everything to screen state
+  gridState.coverMode = savedMode;
+  document.getElementById('mode-btn').textContent = savedMode ? 'Cover' : 'Contain';
+
+  // Restore wrapper styles
+  wrappers.forEach(w => {
+    const idx = w.dataset.index;
+    const orig = savedWrapperStyles.get(idx);
+    if (orig) {
+      w.style.overflow = orig.overflow;
+      w.style.background = orig.background;
+    }
+  });
+
   // Restore screen layout
   recalcCellSize();
+  render();
 }
 
 // ── Init ──
