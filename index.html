@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photo Grid</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect rx='12' width='100' height='100' fill='%236c72cb'/><text x='50' y='68' font-size='60' font-family='sans-serif' font-weight='700' text-anchor='middle' fill='white'>PG</text></svg>">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-hover: #242836;
+    --border: #2d3143;
+    --text: #e4e6f0;
+    --text-dim: #8b8fa3;
+    --accent: #6c72cb;
+    --accent-hover: #8288d8;
+    --danger: #e05555;
+    --cell-size: auto;
+    --gap: 8px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    z-index: 10;
+  }
+
+  .topbar h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-right: auto;
+    letter-spacing: -0.02em;
+  }
+
+  .topbar label {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .topbar input[type="number"] {
+    width: 52px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  .topbar input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  .btn-secondary {
+    background: var(--surface-hover);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: var(--border); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid transparent;
+  }
+  .btn-danger:hover { background: rgba(224,85,85,0.1); }
+
+  /* ── Grid Container ── */
+  .grid-wrapper {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .grid {
+    display: grid;
+    gap: var(--gap);
+    padding: 20px;
+    background: var(--surface);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── Grid Cell ── */
+  .cell {
+    width: var(--cell-size);
+    height: var(--cell-size);
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .cell:hover {
+    border-color: var(--accent);
+    background: rgba(108,114,203,0.04);
+  }
+
+  .cell.drag-over {
+    border-color: var(--accent);
+    background: rgba(108,114,203,0.12);
+    border-style: solid;
+  }
+
+  .cell.has-photo {
+    border-style: solid;
+    border-color: var(--border);
+  }
+
+  .cell.dragging {
+    opacity: 0.4;
+    border-style: solid;
+  }
+
+  .cell .photo {
+    display: block;
+  }
+
+  .cell .delete-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 10;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  .cell.has-photo:hover .delete-btn { display: flex; }
+  .cell .delete-btn:hover { background: var(--danger); }
+
+  .cell .index-label {
+    position: absolute;
+    bottom: 4px;
+    left: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: rgba(0,0,0,0.5);
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+
+  /* ── Pan/Zoom ── */
+  .cell .img-wrapper {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    display: block;
+  }
+  .cell .img-wrapper.panning {
+    cursor: crosshair;
+  }
+  .cell .img-wrapper img {
+    position: absolute;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto;
+  }
+
+  .cell .zoom-label {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    font-size: 11px;
+    color: var(--text);
+    background: rgba(0,0,0,0.6);
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+    display: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .cell:has(.img-wrapper:hover) .zoom-label {
+    display: block;
+  }
+  .cell .img-wrapper:active .zoom-label {
+    display: block;
+  }
+
+  .cell .pan-hint {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: rgba(0,0,0,0.6);
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+    display: none;
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Hidden File Input ── */
+  #file-input { display: none; }
+
+  /* ── Drop Overlay ── */
+  .drop-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15,17,23,0.85);
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: var(--accent);
+    border: 3px dashed var(--accent);
+  }
+  .drop-overlay.active { display: flex; }
+
+  /* ── Print ── */
+  @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    body { background: #fff; color: #000; }
+    .topbar, .drop-overlay, .toast { display: none !important; }
+
+    .grid-wrapper {
+      padding: 0;
+      overflow: visible;
+      display: block;
+    }
+
+    .grid {
+      background: transparent;
+      border: none;
+      padding: 0;
+      page-break-inside: avoid;
+      gap: 2mm;
+    }
+
+    /* Cell sizing: calculate to fit page */
+    .cell {
+      border: 1px solid #ccc;
+      page-break-inside: avoid;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+    }
+
+    .cell.has-photo {
+      border: 1px solid #ccc;
+    }
+
+    .cell .photo {
+      object-fit: cover;
+      object-position: center;
+    }
+
+    .cell .delete-btn,
+    .cell .index-label,
+    .cell .zoom-label,
+    .cell .img-wrapper {
+      display: contents;
+    }
+
+    /* Fill empty cells with placeholder */
+    .cell:not(.has-photo)::after {
+      content: '';
+      width: 100%;
+      height: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Photo Grid</h1>
+  <span id="tiff-status" style="font-size:12px;padding:3px 8px;border-radius:4px;"></span>
+
+  <label>Rows <input type="number" id="rows" min="1" max="20" value="4"></label>
+  <label>Cols <input type="number" id="cols" min="1" max="20" value="4"></label>
+  <button class="btn btn-primary" onclick="applyGridSize()">Apply</button>
+  <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">Upload Photos</button>
+  <button class="btn btn-secondary" onclick="clearGrid()">Clear All</button>
+  <button class="btn btn-secondary" onclick="saveGrid()">Save</button>
+  <button class="btn btn-secondary" onclick="document.getElementById('load-input').click()">Load</button>
+  <button class="btn btn-secondary" onclick="doPrint()">Print Grid</button>
+  <button class="btn btn-danger" onclick="resetAll()">Reset</button>
+
+  <input type="file" id="file-input" multiple accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.tif">
+  <input type="file" id="load-input" accept=".json">
+</div>
+
+<div class="grid-wrapper">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="drop-overlay" id="drop-overlay">Drop photos here</div>
+
+<!-- pako for DEFLATE compression (required by UTIF.js) -->
+<script src="pako.min.js"></script>
+<!-- UTIF.js for TIFF decoding -->
+<script src="utif.js"></script>
+<script>
+console.log('[PhotoGrid] pako:', typeof pako, pako ? Object.keys(pako).slice(0, 5) : 'N/A');
+const tiffSupported = typeof UTIF !== 'undefined';
+console.log('[PhotoGrid] UTIF:', typeof UTIF);
+if (!tiffSupported) {
+  console.warn('[PhotoGrid] UTIF.js not loaded — TIFF files will not be supported.');
+}
+// ── State ──
+const STORAGE_KEY = 'photogrid_state';
+const gridEl = document.getElementById('grid');
+const fileInput = document.getElementById('file-input');
+const toastEl = document.getElementById('toast');
+const dropOverlay = document.getElementById('drop-overlay');
+
+let gridState = loadState();
+
+function defaultState() {
+  return { rows: 4, cols: 4, cells: {} };
+  // cells: { "0": "imgDataUrl", "1": "imgDataUrl", ... }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  return defaultState();
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(gridState)); } catch (_) {}
+}
+
+// ── Save / Load Grid (file) ──
+function saveGrid() {
+  const json = JSON.stringify(gridState, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `photogrid-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`Saved (${formatSize(blob.size)})`);
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+document.getElementById('load-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (!data.rows || !data.cols || !data.cells) {
+      toast('Invalid grid file format');
+      return;
+    }
+
+    // Validate images exist & migrate old string format to new object format
+    let imgCount = 0;
+    for (const key of Object.keys(data.cells)) {
+      const val = data.cells[key];
+      if (typeof val === 'string' && val.startsWith('data:')) {
+        imgCount++;
+        data.cells[key] = { data: val, zoom: 1, panX: 0, panY: 0 };
+      } else if (val && typeof val === 'object' && val.data) {
+        imgCount++;
+        // Ensure new format has defaults
+        if (!val.zoom) val.zoom = 1;
+        if (val.panX == null) val.panX = 0;
+        if (val.panY == null) val.panY = 0;
+      }
+    }
+
+    if (!confirm(`Load "${file.name}"? (${data.rows}×${data.cols} grid, ${imgCount} photos)`)) {
+      return;
+    }
+
+    gridState = data;
+    document.getElementById('rows').value = data.rows;
+    document.getElementById('cols').value = data.cols;
+    saveState();
+    render();
+    recalcCellSize();
+    toast(`Loaded (${imgCount} photos)`);
+  } catch (err) {
+    console.error('Load error:', err);
+    toast('Failed to load file');
+  }
+  e.target.value = '';
+});
+
+// ── Toast ──
+let toastTimer = null;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+}
+
+// ── Render ──
+function render() {
+  gridEl.style.gridTemplateColumns = `repeat(${gridState.cols}, var(--cell-size))`;
+  gridEl.style.gridTemplateRows = `repeat(${gridState.rows}, var(--cell-size))`;
+  gridEl.innerHTML = '';
+
+  const total = gridState.rows * gridState.cols;
+  for (let i = 0; i < total; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell' + (gridState.cells[i] ? ' has-photo' : '');
+    cell.dataset.index = i;
+
+    if (gridState.cells[i]) {
+      // Support legacy string format and new object format
+      let cellData;
+      if (typeof gridState.cells[i] === 'string') {
+        cellData = { data: gridState.cells[i], zoom: 1, panX: 0, panY: 0 };
+        gridState.cells[i] = cellData; // store so mutations persist
+      } else {
+        cellData = gridState.cells[i];
+      }
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'img-wrapper';
+      wrapper.dataset.index = i;
+      wrapper.draggable = true;
+
+      const imgEl = document.createElement('img');
+      imgEl.className = 'photo';
+      imgEl.src = cellData.data;
+      imgEl.draggable = false;
+      imgEl.dataset.index = i;
+
+      // Calculate pixel dimensions to cover the cell
+      const initImg = new Image();
+      initImg.onload = () => {
+        const cellRect = wrapper.parentElement.getBoundingClientRect();
+        const cellW = cellRect.width;
+        const cellH = cellRect.height;
+        const nW = initImg.naturalWidth;
+        const nH = initImg.naturalHeight;
+
+        // Dimensions to cover the cell while maintaining aspect ratio
+        const ratio = nW / nH;
+        let baseW, baseH;
+        if (ratio >= cellW / cellH) {
+          baseH = cellH;
+          baseW = Math.round(baseH * ratio);
+        } else {
+          baseW = cellW;
+          baseH = Math.round(baseW / ratio);
+        }
+
+        imgEl.style.width = baseW + 'px';
+        imgEl.style.height = baseH + 'px';
+        imgEl.style.left = '0px';
+        imgEl.style.top = '0px';
+
+        imgEl.dataset.baseW = baseW;
+        imgEl.dataset.baseH = baseH;
+
+        applyTransform(wrapper, imgEl, cellData.zoom, cellData.panX, cellData.panY);
+      };
+      initImg.onerror = () => {
+        const cellRect = wrapper.parentElement.getBoundingClientRect();
+        imgEl.style.width = cellRect.width + 'px';
+        imgEl.style.height = cellRect.height + 'px';
+        imgEl.style.left = '0px';
+        imgEl.style.top = '0px';
+        imgEl.dataset.baseW = cellRect.width;
+        imgEl.dataset.baseH = cellRect.height;
+        applyTransform(wrapper, imgEl, cellData.zoom, cellData.panX, cellData.panY);
+      };
+      initImg.src = cellData.data;
+
+      imgEl.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (!e.shiftKey) return;
+        e.preventDefault();
+        e.stopPropagation();
+        wrapper.classList.add('panning');
+        panState = {
+          startX: e.clientX,
+          startY: e.clientY,
+          startPanX: cellData.panX,
+          startPanY: cellData.panY,
+          wrapper,
+          img: imgEl,
+          cellIdx: i,
+        };
+      });
+
+      imgEl.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleZoom(wrapper, imgEl, cellData, i, e);
+      }, { passive: false });
+
+      imgEl.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resetZoom(i);
+      });
+
+      wrapper.appendChild(imgEl);
+      const zoomLabel = document.createElement('span');
+      zoomLabel.className = 'zoom-label';
+      zoomLabel.textContent = formatZoom(cellData.zoom);
+      wrapper.appendChild(zoomLabel);
+      const panHint = document.createElement('span');
+      panHint.className = 'pan-hint';
+      panHint.textContent = 'Shift+drag to pan';
+      wrapper.appendChild(panHint);
+
+      // Show hint when zoomed and hovered
+      wrapper.addEventListener('mouseenter', () => {
+        // Show hint when the image is cropped (pan is useful)
+        const baseW = parseFloat(imgEl.dataset.baseW || 0);
+        const baseH = parseFloat(imgEl.dataset.baseH || 0);
+        if (baseW > 0 || baseH > 0) panHint.style.display = 'block';
+      });
+      wrapper.addEventListener('mouseleave', () => {
+        if (!wrapper.classList.contains('panning')) panHint.style.display = 'none';
+      });
+      cell.appendChild(wrapper);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'delete-btn';
+      delBtn.innerHTML = '×';
+      delBtn.onclick = (e) => { e.stopPropagation(); removePhoto(i); };
+      cell.appendChild(delBtn);
+
+      const label = document.createElement('span');
+      label.className = 'index-label';
+      label.textContent = i + 1;
+      cell.appendChild(label);
+    } else {
+      const label = document.createElement('span');
+      label.className = 'index-label';
+      label.style.opacity = '0.4';
+      label.textContent = i + 1;
+      cell.appendChild(label);
+    }
+
+    // Drag events for cell
+    cell.addEventListener('dragover', onDragOver);
+    cell.addEventListener('dragenter', onDragEnter);
+    cell.addEventListener('dragleave', onDragLeave);
+    cell.addEventListener('drop', onDrop);
+
+    gridEl.appendChild(cell);
+  }
+}
+
+// Event delegation for cell click-to-place
+gridEl.addEventListener('click', (e) => {
+  const cell = e.target.closest('.cell');
+  if (!cell) return;
+  if (e.target.closest('.img-wrapper') || e.target.classList.contains('delete-btn')) return;
+  const i = parseInt(cell.dataset.index);
+  if (!isNaN(i) && queuedPhoto !== null && !gridState.cells[i]) {
+    placeQueuedPhoto(i);
+  }
+});
+
+// ── Pan/Zoom Helpers ──
+let panState = null; // { startX, startY, startPanX, startPanY, wrapper, img, cellIdx }
+
+function applyTransform(wrapper, img, zoom, panX, panY) {
+  const bW = parseFloat(img.dataset.baseW || 0);
+  const bH = parseFloat(img.dataset.baseH || 0);
+  if (bW === 0 || bH === 0) return;
+
+  const sW = bW * zoom;
+  const sH = bH * zoom;
+  const rect = wrapper.getBoundingClientRect();
+
+  // Center the scaled image in the cell, then apply pan offset
+  const left = -(sW - rect.width) / 2 + panX;
+  const top = -(sH - rect.height) / 2 + panY;
+
+  img.style.width = sW + 'px';
+  img.style.height = sH + 'px';
+  img.style.left = left + 'px';
+  img.style.top = top + 'px';
+  img.style.transformOrigin = '0 0';
+  img.style.transform = 'none';
+
+  const zoomLabel = wrapper.querySelector('.zoom-label');
+  if (zoomLabel) zoomLabel.textContent = formatZoom(zoom);
+}
+
+function formatZoom(z) {
+  if (z <= 1) return '';
+  return z.toFixed(1) + 'x';
+}
+
+function handleZoom(wrapper, img, cellData, cellIdx, e) {
+  const delta = -e.deltaY > 0 ? 1.1 : 0.9;
+  const newZoom = Math.min(10, Math.max(1, cellData.zoom * delta));
+  if (newZoom === cellData.zoom) return;
+
+  // Zoom toward cursor: keep the point under cursor fixed
+  const rect = wrapper.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  // Current image left/top position
+  const bW = parseFloat(img.dataset.baseW || 0);
+  const bH = parseFloat(img.dataset.baseH || 0);
+  const sW_old = bW * cellData.zoom;
+  const sH_old = bH * cellData.zoom;
+  const leftOld = -(sW_old - rect.width) / 2 + cellData.panX;
+  const topOld = -(sH_old - rect.height) / 2 + cellData.panY;
+
+  // Image-space point under cursor
+  const imageX = (mx - leftOld) / cellData.zoom;
+  const imageY = (my - topOld) / cellData.zoom;
+
+  // New pan so that same image point stays under cursor
+  const sW_new = bW * newZoom;
+  const sH_new = bH * newZoom;
+  const newPanX = mx - imageX * newZoom - (-(sW_new - rect.width) / 2);
+  const newPanY = my - imageY * newZoom - (-(sH_new - rect.height) / 2);
+
+  cellData.zoom = newZoom;
+  cellData.panX = Math.round(newPanX * 10) / 10;
+  cellData.panY = Math.round(newPanY * 10) / 10;
+
+  applyTransform(wrapper, img, cellData.zoom, cellData.panX, cellData.panY);
+  saveState();
+}
+
+function resetZoom(cellIdx) {
+  const cellData = gridState.cells[cellIdx];
+  if (!cellData || typeof cellData === 'string') return;
+  cellData.zoom = 1;
+  cellData.panX = 0;
+  cellData.panY = 0;
+
+  const wrapper = document.querySelector(`.img-wrapper[data-index="${cellIdx}"]`);
+  if (!wrapper) return;
+  const img = wrapper.querySelector('.photo');
+  if (!img) return;
+
+  applyTransform(wrapper, img, 1, 0, 0);
+  saveState();
+}
+
+// Global mousemove/mouseup for panning
+document.addEventListener('mousemove', (e) => {
+  if (!panState) return;
+  const dx = e.clientX - panState.startX;
+  const dy = e.clientY - panState.startY;
+  let newPanX = panState.startPanX + dx;
+  let newPanY = panState.startPanY + dy;
+
+  const cellData = gridState.cells[panState.cellIdx];
+  const zoom = cellData ? cellData.zoom : 1;
+  const bW = parseFloat(panState.img.dataset.baseW || 0);
+  const bH = parseFloat(panState.img.dataset.baseH || 0);
+
+  // Constrain pan so image stays partially visible
+  if (bW > 0 && bH > 0) {
+    const rect = panState.wrapper.getBoundingClientRect();
+    const sW = bW * zoom;
+    const sH = bH * zoom;
+    const overflowX = sW - rect.width;
+    const overflowY = sH - rect.height;
+    // panX=0 centers the image; negative shifts right, positive shifts left
+    newPanX = Math.max(-overflowX, Math.min(overflowX, newPanX));
+    newPanY = Math.max(-overflowY, Math.min(overflowY, newPanY));
+  }
+
+  // Update cell data and apply transform
+  if (cellData) {
+    cellData.panX = Math.round(newPanX * 10) / 10;
+    cellData.panY = Math.round(newPanY * 10) / 10;
+    applyTransform(panState.wrapper, panState.img, cellData.zoom, cellData.panX, cellData.panY);
+
+    const zoomLabel = panState.wrapper.querySelector('.zoom-label');
+    if (zoomLabel) zoomLabel.textContent = formatZoom(cellData.zoom);
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (!panState) return;
+  panState.wrapper.classList.remove('panning');
+  saveState();
+  panState = null;
+});
+
+// ── Dynamic Cell Sizing ──
+let resizeRAF = null;
+function recalcCellSize() {
+  const wrapper = document.querySelector('.grid-wrapper');
+  if (!wrapper) return;
+
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const availWidth = wrapperRect.width - 48;  // wrapper padding
+  const availHeight = wrapperRect.height - 48; // wrapper padding
+
+  const gridPad = 40; // 20px padding each side
+  const gap = 8;
+
+  const cols = gridState.cols;
+  const rows = gridState.rows;
+
+  // Max cell size that fits in both dimensions
+  const maxByWidth = (availWidth - gridPad) / cols - gap * (cols - 1) / cols;
+  const maxByHeight = (availHeight - gridPad) / rows - gap * (rows - 1) / rows;
+  const cellSize = Math.floor(Math.min(maxByWidth, maxByHeight, 320));
+
+  // Clamp to minimum 40px
+  const size = Math.max(40, cellSize);
+  document.documentElement.style.setProperty('--cell-size', size + 'px');
+}
+
+window.addEventListener('resize', () => {
+  if (resizeRAF) cancelAnimationFrame(resizeRAF);
+  resizeRAF = requestAnimationFrame(() => { recalcCellSize(); });
+});
+
+// ── Print Layout ──
+function doPrint() {
+  // Calculate cell size to fit A4 page with margins
+  const pageWidth = 210 - 20;    // A4 minus margins (mm)
+  const pageHeight = 297 - 20;   // A4 minus margins (mm)
+  const margin = 2;              // gap between cells
+  const cols = gridState.cols;
+  const rows = gridState.rows;
+
+  const cellW = (pageWidth - margin * (cols + 1)) / cols;
+  const cellH = (pageHeight - margin * (rows + 1)) / rows;
+  const cellSize = Math.min(cellW, cellH);
+
+  document.documentElement.style.setProperty('--cell-size', cellSize + 'mm');
+
+  // Set up print-specific layout
+  gridEl.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+  gridEl.style.gridTemplateRows = `repeat(${rows}, auto)`;
+
+  window.print();
+
+  // Restore screen layout
+  recalcCellSize();
+}
+
+// ── Init ──
+function applyGridSize() {
+  const r = Math.min(20, Math.max(1, parseInt(document.getElementById('rows').value) || 4));
+  const c = Math.min(20, Math.max(1, parseInt(document.getElementById('cols').value) || 4));
+  document.getElementById('rows').value = r;
+  document.getElementById('cols').value = c;
+
+  // Preserve existing cells
+  const oldCells = { ...gridState.cells };
+  const oldTotal = gridState.rows * gridState.cols;
+  const newTotal = r * c;
+
+  gridState = { rows: r, cols: c, cells: {} };
+  // Copy cells that still fit
+  for (const [idx, data] of Object.entries(oldCells)) {
+    const i = parseInt(idx);
+    if (i < newTotal) gridState.cells[i] = data;
+  }
+
+  saveState();
+  render();
+  recalcCellSize();
+}
+
+function removePhoto(index) {
+  delete gridState.cells[index];
+  saveState();
+  render();
+  toast('Photo removed');
+}
+
+function clearGrid() {
+  if (Object.keys(gridState.cells).length === 0) return;
+  gridState.cells = {};
+  saveState();
+  render();
+  toast('Grid cleared');
+}
+
+function resetAll() {
+  if (!confirm('Reset everything? This will delete all photos and restore defaults.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  gridState = defaultState();
+  render();
+  toast('Reset to defaults');
+}
+
+// ── File Upload ──
+let queuedPhoto = null; // null = no queue, or the data URL
+
+// Check if a Uint8Array starts with TIFF magic bytes (II or MM byte order)
+function isTiff(array) {
+  return array[0] === 0x49 && array[1] === 0x49 && array[2] === 0x2a && array[3] === 0 || // II (little-endian)
+         array[0] === 0x4d && array[1] === 0x4d && array[2] === 0x00 && array[3] === 0x2a;  // MM (big-endian)
+}
+
+function testTiffSupport() {
+  if (!tiffSupported) return false;
+  return typeof UTIF.decode === 'function' &&
+    typeof UTIF.decodeImage === 'function' &&
+    typeof UTIF.toRGBA8 === 'function';
+}
+
+// Read the first N bytes of a file as a Uint8Array
+function readFileBytes(file, n) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file.slice(0, n));
+  });
+}
+
+// Draw image to canvas with resizing, return JPEG data URL
+function compressToJpeg(srcUrl, maxDim = 1920, quality = 0.85) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxDim || h > maxDim) {
+        const scale = Math.min(maxDim / w, maxDim / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(null);
+    img.src = srcUrl;
+  });
+}
+
+// Convert TIFF bytes to a compressed JPEG via UTIF.js + canvas
+function tiffToJpeg(array) {
+  const ifds = UTIF.decode(array);
+  if (!ifds || ifds.length === 0) return null;
+  UTIF.decodeImage(array, ifds[0]);
+  const rgba = UTIF.toRGBA8(ifds[0]);
+  const w = ifds[0].width, h = ifds[0].height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(w, h);
+  imgData.data.set(rgba);
+  ctx.putImageData(imgData, 0, 0);
+  return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+// Process a single file — always returns a resized/compressed JPEG data URL
+// or null on failure
+async function processFile(file, callback) {
+  console.log('[PhotoGrid] processFile:', file.name, 'size:', file.size);
+
+  const bytes = await readFileBytes(file, 12);
+  const isTif = isTiff(bytes);
+  console.log('[PhotoGrid] isTIFF:', isTif, 'hex:', Array.from(bytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+  let dataUrl;
+
+  if (isTif) {
+    if (!tiffSupported) {
+      toast(`TIFF files need UTIF.js — ${file.name} was not loaded`);
+      callback(null);
+      return;
+    }
+    // Read full file, decode TIFF → JPEG
+    const full = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(new Uint8Array(r.result));
+      r.onerror = reject;
+      r.readAsArrayBuffer(file);
+    });
+    try {
+      dataUrl = tiffToJpeg(full);
+      if (!dataUrl) { toast(`Failed to decode ${file.name}`); callback(null); return; }
+      console.log('[PhotoGrid] TIFF → JPEG OK, size:', dataUrl.length);
+    } catch (err) {
+      console.error('[PhotoGrid] TIFF decode error:', err);
+      toast(`Failed to decode ${file.name} (TIFF)`);
+      callback(null);
+      return;
+    }
+  } else {
+    // Read non-TIFF as data URL, then compress to JPEG
+    dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+    // Compress: load into image, draw to canvas at max 1920px, export as JPEG
+    dataUrl = await compressToJpeg(dataUrl, 1920, 0.85);
+    if (!dataUrl) { toast(`Failed to process ${file.name}`); callback(null); return; }
+    console.log('[PhotoGrid] compressed:', dataUrl.length, 'chars');
+  }
+
+  callback(dataUrl);
+}
+
+fileInput.addEventListener('change', async () => {
+  const files = Array.from(fileInput.files);
+  if (files.length === 0) return;
+
+  const results = await Promise.all(files.map(f =>
+    new Promise(resolve => processFile(f, resolve))
+  ));
+  const valid = results.filter(Boolean);
+  queuedPhoto = valid;
+  fileInput.value = '';
+  toast(`${valid.length} photo(s) queued — click an empty cell to place`);
+});
+
+function placeQueuedPhoto(cellIndex) {
+  if (!Array.isArray(queuedPhoto) || queuedPhoto.length === 0) return;
+  if (gridState.cells[cellIndex] !== undefined) {
+    toast('Cell already has a photo');
+    return;
+  }
+  // Place first queued photo
+  gridState.cells[cellIndex] = { data: queuedPhoto[0], zoom: 1, panX: 0, panY: 0 };
+  queuedPhoto = queuedPhoto.slice(1);
+
+  if (queuedPhoto.length === 0) queuedPhoto = null;
+  saveState();
+  render();
+  toast('Photo placed');
+}
+
+// ── Drag & Drop ──
+let dragSource = null; // source cell index being dragged
+
+function onDragStart(e) {
+  const wrapper = e.target.closest('.img-wrapper');
+  if (!wrapper) return;
+  dragSource = parseInt(wrapper.dataset.index);
+  wrapper.closest('.cell').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(dragSource));
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function onDragEnter(e) {
+  e.preventDefault();
+  const cell = e.target.closest('.cell');
+  if (cell) cell.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+  const cell = e.target.closest('.cell');
+  if (cell && !cell.contains(e.relatedTarget)) cell.classList.remove('drag-over');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  const targetCell = e.target.closest('.cell');
+  if (!targetCell) return;
+  targetCell.classList.remove('drag-over');
+
+  const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'));
+  const targetIdx = parseInt(targetCell.dataset.index);
+
+  if (isNaN(sourceIdx)) {
+    // File dropped on grid — place in target if empty, otherwise next empty cell
+    if (!queuedPhoto) return;
+    const total = gridState.rows * gridState.cols;
+    const placed = [];
+    const photos = Array.isArray(queuedPhoto) ? queuedPhoto : [queuedPhoto];
+    for (const photo of photos) {
+      // Try target first, then scan for next empty cell
+      let target = targetIdx;
+      if (gridState.cells[target] !== undefined) {
+        for (let j = 0; j < total; j++) {
+          if (j !== targetIdx && !gridState.cells[j]) {
+            target = j;
+            break;
+          }
+        }
+      }
+      if (gridState.cells[target] === undefined) {
+        gridState.cells[target] = { data: photo, zoom: 1, panX: 0, panY: 0 };
+        placed.push(photo);
+      }
+    }
+    if (placed.length > 0) {
+      queuedPhoto = photos.slice(placed.length).length === 0 ? null : photos.slice(placed.length);
+      saveState();
+      render();
+      toast(`Placed ${placed.length} photo(s)`);
+    } else {
+      toast('Grid is full');
+    }
+    return;
+  }
+
+  // If source is now outside the grid (grid resized), just remove it
+  const total = gridState.rows * gridState.cols;
+  if (sourceIdx >= total) {
+    delete gridState.cells[sourceIdx];
+    saveState();
+    render();
+    return;
+  }
+
+  const targetData = gridState.cells[targetIdx];
+
+  if (targetIdx === sourceIdx) return; // same cell
+
+  // If target has a photo, swap; otherwise move
+  if (targetData !== undefined) {
+    gridState.cells[targetIdx] = gridState.cells[sourceIdx];
+    gridState.cells[sourceIdx] = targetData;
+    toast('Photos swapped');
+  } else {
+    gridState.cells[targetIdx] = gridState.cells[sourceIdx];
+    delete gridState.cells[sourceIdx];
+    toast('Photo moved');
+  }
+
+  dragSource = null;
+  saveState();
+  render();
+}
+
+// Listen for dragend to clean up dragging class
+document.addEventListener('dragend', () => {
+  document.querySelectorAll('.cell.dragging').forEach(c => c.classList.remove('dragging'));
+  dragSource = null;
+});
+
+// Photo cells are draggable
+document.addEventListener('dragstart', (e) => {
+  if (e.target.classList.contains('img-wrapper') || e.target.closest('.img-wrapper')) onDragStart(e);
+});
+
+// ── Global Drag & Drop (file drop onto whole page) ──
+// Uses capture phase on <html> to intercept before browser's internal handlers.
+let dragCounter = 0;
+
+document.documentElement.addEventListener('dragenter', (e) => {
+  if (e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes('text/plain')) {
+    e.preventDefault();
+    dragCounter++;
+    dropOverlay.classList.add('active');
+  }
+}, true);
+
+document.documentElement.addEventListener('dragover', (e) => {
+  if (e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes('text/plain')) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+}, true);
+
+document.documentElement.addEventListener('dragleave', (e) => {
+  if (e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes('text/plain')) {
+    dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove('active'); }
+  }
+}, true);
+
+// Capture the drop so we get it before the browser
+document.documentElement.addEventListener('drop', (e) => {
+  if (e.dataTransfer.types.includes('Files') && !e.dataTransfer.types.includes('text/plain')) {
+    e.preventDefault();
+    dragCounter = 0;
+    dropOverlay.classList.remove('active');
+
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+      f.type.startsWith('image/') || /\.tiff?$/i.test(f.name)
+    );
+    if (files.length === 0) return;
+
+    Promise.all(files.map(f =>
+      new Promise(resolve => processFile(f, resolve))
+    )).then(results => {
+      const valid = results.filter(Boolean);
+      if (Array.isArray(queuedPhoto)) {
+        queuedPhoto.push(...valid);
+      } else {
+        queuedPhoto = valid;
+      }
+      toast(`${valid.length} photo(s) queued — click an empty cell to place`);
+    }).catch(err => {
+      console.error('[PhotoGrid] drop error:', err);
+      toast('Failed to load some files');
+    });
+  }
+}, true);
+
+// ── Init ──
+// Restore grid size inputs
+document.getElementById('rows').value = gridState.rows;
+document.getElementById('cols').value = gridState.cols;
+
+// Show TIFF support status
+const tiffEl = document.getElementById('tiff-status');
+if (testTiffSupport()) {
+  tiffEl.textContent = 'TIFF: OK';
+  tiffEl.style.background = 'rgba(76,175,80,0.15)';
+  tiffEl.style.color = '#66bb6a';
+  tiffEl.style.border = '1px solid rgba(76,175,80,0.3)';
+} else if (tiffSupported) {
+  tiffEl.textContent = 'TIFF: no pako';
+  tiffEl.style.background = 'rgba(255,152,0,0.15)';
+  tiffEl.style.color = '#ffa726';
+  tiffEl.style.border = '1px solid rgba(255,152,0,0.3)';
+} else {
+  tiffEl.textContent = 'TIFF: off';
+  tiffEl.style.background = 'rgba(158,158,158,0.15)';
+  tiffEl.style.color = '#9e9e9e';
+  tiffEl.style.border = '1px solid rgba(158,158,158,0.3)';
+}
+
+render();
+recalcCellSize();
+</script>
+</body>
+</html>
